@@ -252,21 +252,36 @@ Citizen.CreateThread(function()
     end
 end)
 
-RegisterCommand('configbed', function(source, args, rawCommand)
+RegisterCommand('configbed', function()
+    TriggerServerEvent("configTool:tryConfig", "bed")
+end)
+
+RegisterNetEvent("configTool:startConfig", function(type)
     if configMode then
         TriggerEvent('chat:addMessage', {
             color = { 255, 0, 0 },
-            args = { "Config Tool", "Already in configuration mode! Use ESC to cancel current session." }
+            args = { "Config Tool", "Ya estás en modo configuración! Usa ESC para cancelar." }
         })
         return
     end
 
     configMode = true
-    configType = 'bed'
-    SpawnConfigNPC('bed')
-end, false)
+    configType = type
+    SpawnConfigNPC(type)
+end)
+
+RegisterNetEvent("configTool:denied", function()
+    TriggerEvent('chat:addMessage', {
+        color = { 255, 0, 0 },
+        args = { "Config Tool", "No tienes permisos para usar este comando." }
+    })
+end)
 
 RegisterCommand('confighelp', function(source, args, rawCommand)
+        TriggerServerEvent("configTool:tryHelpCommand", "bed")
+end, false)
+
+RegisterNetEvent("configTool:helpCommand", function()
     TriggerEvent('chat:addMessage', {
         color = { 0, 255, 255 },
         multiline = true,
