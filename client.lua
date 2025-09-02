@@ -5,6 +5,10 @@ local originalCoords = nil
 local rotationSpeed = Config.rotationSpeed
 local verticalOffset = 0.0
 local moveSpeed = Config.moveSpeed
+local bedLocked = false
+local spawnedMonitor = nil
+local placingMonitor = false
+local tempBedData = nil
 
 local animationData = {
     bed = {
@@ -156,6 +160,27 @@ function GetCameraWorldPosition()
     return hit == 1, endCoords
 end
 
+local function GetClosestObject(coords, radius)
+    local handle, object = FindFirstObject()
+    local success
+    local closestObj, closestDist = nil, radius
+
+    repeat
+        if DoesEntityExist(object) then
+            local objCoords = GetEntityCoords(object)
+            local dist = #(coords - objCoords)
+            if dist < closestDist then
+                closestObj = object
+                closestDist = dist
+            end
+        end
+        success, object = FindNextObject(handle)
+    until not success
+    EndFindObject(handle)
+
+    return closestObj, closestObj and GetEntityModel(closestObj) or nil
+end
+
 function SaveConfiguration()
     if not spawnedNPC or not DoesEntityExist(spawnedNPC) then
         return
@@ -164,26 +189,145 @@ function SaveConfiguration()
     local coords = GetEntityCoords(spawnedNPC)
     local heading = GetEntityHeading(spawnedNPC)
 
-    local offset = vector3(
-        coords.x - originalCoords.x,
-        coords.y - originalCoords.y,
-        coords.z - originalCoords.z
+    local obj, objModel = GetClosestObject(coords, 2.0)
+
+    lib.registerContext({
+        id = 'bed_save_menu',
+        title = 'Guardar configuración de cama',
+        options = {
+            {
+                title = 'Cama normal',
+                description = 'Usable para check-in',
+                icon = 'bed',
+                onSelect = function()
+                    bedLocked = false
+                    PrintBedConfig(coords, heading, objModel)
+                    CleanupConfiguration()
+                end
+            },
+            {
+                title = 'Cama bloqueada',
+                description = 'No se podrá usar para check-in',
+                icon = 'ban',
+                onSelect = function()
+                    bedLocked = true
+                    PrintBedConfig(coords, heading, objModel)
+                    CleanupConfiguration()
+                end
+            },
+            {
+                title = 'Cama X-Ray',
+                description = 'Spawnea un monitor para rayos X',
+                icon = 'tv',
+                onSelect = function()
+                    bedLocked = true
+                    StartPlacingMonitor(coords, heading, objModel)
+                end
+            },
+        }
+    })
+
+    lib.showContext('bed_save_menu')
+end
+
+function StartPlacingMonitor(bedCoords, bedHeading, bedModel)
+    placingMonitor = true
+    configMode = false
+
+    RequestModel(Config.xrayModel)
+    while not HasModelLoaded(Config.xrayModel) do
+        Citizen.Wait(50)
+    end
+
+    spawnedMonitor = CreateObject(Config.xrayModel, bedCoords.x, bedCoords.y + 1.0, bedCoords.z, true, true, true)
+    SetEntityHeading(spawnedMonitor, bedHeading)
+
+    TriggerEvent('chat:addMessage', {
+        color = { 0, 200, 255 },
+        args = { "Config Tool", "Coloca el monitor (ENTER = Guardar, ESC = Cancelar)" }
+    })
+
+    tempBedData = {
+        coords = bedCoords,
+        heading = bedHeading,
+        model = bedModel
+    }
+end
+
+function HandleMonitorPlacement()
+    if not placingMonitor or not spawnedMonitor or not DoesEntityExist(spawnedMonitor) then return end
+
+    local hit, coords = GetCameraWorldPosition()
+    if hit then
+        SetEntityCoords(spawnedMonitor, coords.x, coords.y, coords.z + verticalOffset, false, false, false, true)
+    end
+
+    local heading = GetEntityHeading(spawnedMonitor)
+
+    if IsControlPressed(0, 241) then
+        SetEntityHeading(spawnedMonitor, heading + rotationSpeed)
+    end
+    if IsControlPressed(0, 242) then
+        SetEntityHeading(spawnedMonitor, heading - rotationSpeed)
+    end
+    if IsControlPressed(0, 172) then
+        verticalOffset = verticalOffset + moveSpeed
+    end
+    if IsControlPressed(0, 173) then
+        verticalOffset = verticalOffset - moveSpeed
+    end
+
+    if IsControlJustPressed(0, 191) then -- ENTER
+        SaveXrayConfig()
+    end
+    if IsControlJustPressed(0, 322) then -- ESC
+        CancelMonitorPlacement()
+    end
+end
+
+function SaveXrayConfig()
+    if not spawnedMonitor or not DoesEntityExist(spawnedMonitor) then return end
+    if not tempBedData then return end
+
+    local monitorCoords = GetEntityCoords(spawnedMonitor)
+    local monitorRot = GetEntityRotation(spawnedMonitor, 2)
+
+    local cfg = string.format(
+        "{ coords = vector4(%.4f, %.4f, %.4f, %.4f), taken = false, model = '%s', getOutOffset = 1.3, xray = true, xrayMonitor = vector3(%.4f, %.4f, %.4f), xrayMonitorRot = vector3(%.1f, %.1f, %.1f), screenScale = 0.042, lockedBed = true },",
+        tempBedData.coords.x, tempBedData.coords.y, tempBedData.coords.z - 1.0, tempBedData.heading,
+        tempBedData.model,
+        monitorCoords.x, monitorCoords.y, monitorCoords.z,
+        monitorRot.x, monitorRot.y, monitorRot.z
     )
 
-    local configText = string.format([[
+    print(cfg)
+    if lib and lib.setClipboard then lib.setClipboard(cfg) end
 
-=== %s CONFIGURATION ===
-Position: vector3(%.2f, %.2f, %.2f)
-Heading: %.2f
-Offset from spawn: vector3(%.2f, %.2f, %.2f)
-Coords = vector4(%.2f, %.2f, %.2f, %.2f),
-========================]],
-        animationData[configType].description:upper(),
-        coords.x, coords.y, coords.z,
-        heading,
-        offset.x, offset.y, offset.z,
-        coords.x, coords.y, coords.z - 1,
-        heading
+    TriggerEvent('chat:addMessage', {
+        color = { 0, 255, 0 },
+        args = { "Config Tool", "Configuración X-Ray guardada! (F8 para copiar)" }
+    })
+
+    CleanupConfiguration()
+    if spawnedMonitor then DeleteEntity(spawnedMonitor) end
+    spawnedMonitor, placingMonitor = nil, false
+end
+
+function CancelMonitorPlacement()
+    if spawnedMonitor and DoesEntityExist(spawnedMonitor) then
+        DeleteEntity(spawnedMonitor)
+    end
+    spawnedMonitor, placingMonitor = nil, false
+    tempBedData = nil
+    TriggerEvent('chat:addMessage', { color = { 255, 0, 0 }, args = { "Config Tool", "Monitor cancelado." } })
+end
+
+function PrintBedConfig(coords, heading, modelHash)
+    local configText = string.format(
+        "{ coords = vector4(%.4f, %.4f, %.4f, %.4f), taken = false, model = '%s', getOutOffset = 1.3%s },",
+        coords.x, coords.y, coords.z - 1, heading,
+        modelHash,
+        bedLocked and ", lockedBed = true" or ""
     )
 
     print(configText)
@@ -191,10 +335,16 @@ Coords = vector4(%.2f, %.2f, %.2f, %.2f),
     TriggerEvent('chat:addMessage', {
         color = { 0, 255, 0 },
         multiline = true,
-        args = { "Config Tool", "Configuration saved! Check console (F8) for copy-paste ready config." }
+        args = { "Config Tool", "Configuración guardada! Mira la consola (F8)." }
     })
 
-    CleanupConfiguration()
+    if lib and lib.setClipboard then
+        lib.setClipboard(configText)
+        TriggerEvent('chat:addMessage', {
+            color = { 0, 200, 255 },
+            args = { "Config Tool", "Configuración copiada al portapapeles!" }
+        })
+    end
 end
 
 function CancelConfiguration()
@@ -246,6 +396,19 @@ Citizen.CreateThread(function()
                     coords.z, heading))
                 DrawText(0.1, 0.15)
             end
+        elseif placingMonitor and spawnedMonitor and DoesEntityExist(spawnedMonitor) then
+            local coords = GetEntityCoords(spawnedMonitor)
+            local heading = GetEntityHeading(spawnedMonitor)
+
+            SetTextFont(4)
+            SetTextScale(0.4, 0.4)
+            SetTextColour(0, 200, 255, 255)
+            SetTextOutline()
+            SetTextEntry("STRING")
+            AddTextComponentString(string.format("X: %.3f | Y: %.3f | Z: %.3f | H: %.2f", coords.x, coords.y, coords.z,
+                heading))
+            DrawText(0.1, 0.15)
+            HandleMonitorPlacement()
         else
             Citizen.Wait(500)
         end
@@ -278,7 +441,7 @@ RegisterNetEvent("configTool:denied", function()
 end)
 
 RegisterCommand('confighelp', function(source, args, rawCommand)
-        TriggerServerEvent("configTool:tryHelpCommand", "bed")
+    TriggerServerEvent("configTool:tryHelpCommand", "bed")
 end, false)
 
 RegisterNetEvent("configTool:helpCommand", function()
