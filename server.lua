@@ -58,6 +58,15 @@ RegisterNetEvent("configTool:tryConfig", function(type)
     end
 end)
 
+RegisterNetEvent("configTool:tryConfigPager", function()
+    local src = source
+    if hasPermission(src) then
+        TriggerClientEvent("configTool:startConfigPager", src)
+    else
+        TriggerClientEvent("configTool:denied", src)
+    end
+end)
+
 RegisterNetEvent("configTool:tryHelpCommand", function(type)
     local src = source
     if hasPermission(src) then

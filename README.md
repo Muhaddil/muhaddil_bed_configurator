@@ -13,7 +13,8 @@ A simple FiveM script to spawn a configurable NPC and adjust its position and ro
 
 ## Commands
 
-* `/configbed` – Start configuring bed NPC positions.
+* `/configbed` – Start configuring bed positions.
+* `/configpager` – Start configuring pager positions.
 * `/confighelp` – Show help message with available commands.
 
 ## Controls
@@ -28,6 +29,6 @@ A simple FiveM script to spawn a configurable NPC and adjust its position and ro
 
 1. Add the resource folder to your server’s `resources` directory.
 2. Add `start muhaddil_bed_configurator` to your `server.cfg`.
-3. Use `/configbed` in-game to start configuring NPC positions.
+3. Use one of the available commands in-game to start configuring positions.
 4. Add `add_ace group.admin bedconfigurator allow # allow all commands` in your `server.cfg` to add permissions to use the commands (if you want to use ACE permissions).
 5. Restart your server.
