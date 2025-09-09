@@ -528,7 +528,7 @@ end
 function HandlePagerScreenPlacement()
     if not placingPagerScreen or not spawnedPager or not DoesEntityExist(spawnedPager) then return end
 
-    local hit, coords = GetCameraWorldPosition()
+    local hit, coords = GetCameraWorldPosition(spawnedPager)
     if hit and coords then
         SetEntityCoords(spawnedPager, coords.x, coords.y, coords.z + verticalOffset, false, false, false, true)
     end
