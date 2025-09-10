@@ -17,6 +17,5 @@ Config.AllowedGroups = {
 }
 
 -- You should not need to change anything below this line
-Config.backOffset = 0.0 -- How far back the ECG is placed from the monitor
-Config.leftOffset = 0.3 -- How far left the ECG is placed from the monitor
-Config.rotAdjustment = 80.0 -- How much to rotate the ECG when placing it
+Config.backOffset = 0.2 -- How far back the xray is placed from the monitor
+Config.leftOffset = 0.3 -- How far left the xray is placed from the monitor

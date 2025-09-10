@@ -5,6 +5,7 @@ local originalCoords = nil
 local rotationSpeed = Config.rotationSpeed
 local verticalOffset = 0.0
 local verticalOffsetXray = Config.verticalOffsetXray
+local verticalOffsetECG = Config.verticalOffsetECG
 local moveSpeed = Config.moveSpeed
 local bedLocked = false
 local spawnedMonitor = nil
@@ -284,22 +285,21 @@ function SaveMonitorConfig()
     if not tempBedData then return end
 
     local monitorCoords = GetEntityCoords(spawnedMonitor)
-    local monitorRot = GetEntityRotation(spawnedMonitor, 2)
+    local monitorRot = GetEntityRotation(spawnedMonitor, 1)
 
     local cfg
     if placingMonitorType == "xray" then
-        local rotAdjustment = 80.0
-        local adjustedRotZ = monitorRot.z + rotAdjustment
+        local adjustedRotZ = monitorRot.z % 360
 
         local radians = math.rad(monitorRot.z)
 
         local leftOffset = Config.leftOffset
-        local offsetXLeft = -leftOffset * math.cos(radians)
-        local offsetYLeft = -leftOffset * math.sin(radians)
+        local offsetXLeft = leftOffset * math.sin(radians)
+        local offsetYLeft = -leftOffset * math.cos(radians)
 
         local backOffset = Config.backOffset
         local offsetXBack = -backOffset * math.sin(radians)
-        local offsetYBack = backOffset * math.cos(radians)
+        local offsetYBack = -backOffset * math.cos(radians)
 
         local adjustedX = monitorCoords.x + offsetXLeft + offsetXBack
         local adjustedY = monitorCoords.y + offsetYLeft + offsetYBack
@@ -317,10 +317,13 @@ function SaveMonitorConfig()
         )
     elseif placingMonitorType == "ecg" then
         cfg = string.format(
-            "{ coords = vector4(%.4f, %.4f, %.4f, %.4f), bedcoords = vector3(%.4f, %.4f, %.4f), rotation = vector3(%.4f, %.4f, %.4f), name = 'ICU 1' },",
+            "            {\n" ..
+            "                coords = vector4(%.4f, %.4f, %.4f, %.4f),\n" ..
+            "                bedcoords = vector3(%.4f, %.4f, %.4f),\n" ..
+            "                name = 'ICU 1'\n" ..
+            "            },",
             monitorCoords.x, monitorCoords.y, monitorCoords.z, monitorRot.z,
-            tempBedData.coords.x, tempBedData.coords.y, tempBedData.coords.z - 1.0,
-            monitorRot.x, monitorRot.y, monitorRot.z
+            tempBedData.coords.x, tempBedData.coords.y, tempBedData.coords.z - 1.0
         )
     end
 
@@ -355,10 +358,18 @@ function HandleMonitorPlacement()
         SetEntityHeading(spawnedMonitor, heading - rotationSpeed)
     end
     if IsControlPressed(0, 172) then
-        verticalOffsetXray = verticalOffsetXray + moveSpeed
+        if placingMonitorType == "ecg" then
+            verticalOffsetECG = verticalOffsetECG + moveSpeed
+        else
+            verticalOffsetXray = verticalOffsetXray + moveSpeed
+        end
     end
     if IsControlPressed(0, 173) then
-        verticalOffsetXray = verticalOffsetXray - moveSpeed
+        if placingMonitorType == "ecg" then
+            verticalOffsetECG = verticalOffsetECG - moveSpeed
+        else
+            verticalOffsetXray = verticalOffsetXray - moveSpeed
+        end
     end
 
     if IsControlJustPressed(0, 191) then -- ENTER
