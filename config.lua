@@ -4,7 +4,6 @@ Config.rotationSpeed = 5.0
 Config.moveSpeed = 0.01
 Config.NPCModel = "s_m_m_doctor_01"
 Config.xrayModel = "prop_monitor_w_large" -- The prop used for the xray in the official config
-Config.verticalOffsetXray = -0.5 -- Vertical offset for the xray when placing it
 Config.scale = 0.042 -- The scale of the screen on the xray screenX, adjust if you use a different prop
 Config.PagerScreen = "xm_prop_x17_tv_ceiling_01"
 Config.StationaryECGProp = 'v_med_cor_ceilingmonitor'

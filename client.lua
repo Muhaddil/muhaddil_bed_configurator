@@ -4,8 +4,6 @@ local spawnedNPC = nil
 local originalCoords = nil
 local rotationSpeed = Config.rotationSpeed
 local verticalOffset = 0.0
-local verticalOffsetXray = Config.verticalOffsetXray
-local verticalOffsetECG = Config.verticalOffsetECG
 local moveSpeed = Config.moveSpeed
 local bedLocked = false
 local spawnedMonitor = nil
@@ -357,19 +355,19 @@ function HandleMonitorPlacement()
     if IsControlPressed(0, 242) then
         SetEntityHeading(spawnedMonitor, heading - rotationSpeed)
     end
-    if IsControlPressed(0, 172) then
-        if placingMonitorType == "ecg" then
-            verticalOffsetECG = verticalOffsetECG + moveSpeed
-        else
-            verticalOffsetXray = verticalOffsetXray + moveSpeed
-        end
+
+    if IsControlPressed(0, 172) then -- Up Arrow
+        verticalOffset = verticalOffset + moveSpeed
     end
-    if IsControlPressed(0, 173) then
-        if placingMonitorType == "ecg" then
-            verticalOffsetECG = verticalOffsetECG - moveSpeed
-        else
-            verticalOffsetXray = verticalOffsetXray - moveSpeed
-        end
+    if IsControlPressed(0, 173) then -- Down Arrow
+        verticalOffset = verticalOffset - moveSpeed
+    end
+
+    if IsControlPressed(0, 174) then -- Left Arrow
+        SetEntityHeading(spawnedMonitor, heading - rotationSpeed)
+    end
+    if IsControlPressed(0, 175) then -- Right Arrow
+        SetEntityHeading(spawnedMonitor, heading + rotationSpeed)
     end
 
     if IsControlJustPressed(0, 191) then -- ENTER
@@ -549,6 +547,13 @@ function HandlePagerScreenPlacement()
     if IsControlPressed(0, 242) then SetEntityHeading(spawnedPager, heading - rotationSpeed) end
     if IsControlPressed(0, 172) then verticalOffset = verticalOffset + moveSpeed end
     if IsControlPressed(0, 173) then verticalOffset = verticalOffset - moveSpeed end
+
+    if IsControlPressed(0, 174) then     -- Left Arrow
+        SetEntityHeading(spawnedPager, heading - rotationSpeed)
+    end
+    if IsControlPressed(0, 175) then -- Right Arrow
+        SetEntityHeading(spawnedPager, heading + rotationSpeed)
+    end
 
     if IsControlJustPressed(0, 191) then -- ENTER
         SavePagerScreenConfig()
