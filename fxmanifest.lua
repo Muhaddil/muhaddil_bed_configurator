@@ -4,7 +4,7 @@ lua54 'yes'
 
 author 'Muhaddil'
 description 'A simple NPC bed configurator for FiveM'
-version 'v0.0.7-beta'
+version 'v0.0.8-beta'
 
 shared_script {
     '@ox_lib/init.lua',

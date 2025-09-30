@@ -117,11 +117,12 @@ function HandleNPCMovement()
     end
 end
 
-function GetCameraWorldPosition(entity)
+function GetCameraWorldPosition(entity, distance)
+    distance = distance or 100.0
+
     local camCoords = GetGameplayCamCoord()
     local camRot = GetGameplayCamRot(2)
 
-    local distance = 100.0
     local rotX = math.rad(camRot.x)
     local rotZ = math.rad(camRot.z)
 
@@ -140,23 +141,24 @@ function GetCameraWorldPosition(entity)
     local rayHandle = StartExpensiveSynchronousShapeTestLosProbe(
         camCoords.x, camCoords.y, camCoords.z,
         rayEnd.x, rayEnd.y, rayEnd.z,
-        1,
+        -1,
         entity,
-        7
+        4
     )
 
     local _, hit, endCoords, _, _ = GetShapeTestResult(rayHandle)
 
-    if hit ~= 1 then
+    if hit == 1 then
+        return true, endCoords
+    else
         local foundGround, groundCoords = GetGroundZFor_3dCoord(rayEnd.x, rayEnd.y, rayEnd.z + 50.0, false)
         if foundGround then
             return true, vector3(rayEnd.x, rayEnd.y, groundCoords)
         else
             return true, vector3(rayEnd.x, rayEnd.y, camCoords.z - 1.0)
+            -- return true, rayEnd
         end
     end
-
-    return hit == 1, endCoords
 end
 
 local function GetClosestObject(coords, radius)
@@ -548,7 +550,7 @@ function HandlePagerScreenPlacement()
     if IsControlPressed(0, 172) then verticalOffset = verticalOffset + moveSpeed end
     if IsControlPressed(0, 173) then verticalOffset = verticalOffset - moveSpeed end
 
-    if IsControlPressed(0, 174) then     -- Left Arrow
+    if IsControlPressed(0, 174) then -- Left Arrow
         SetEntityHeading(spawnedPager, heading - rotationSpeed)
     end
     if IsControlPressed(0, 175) then -- Right Arrow
