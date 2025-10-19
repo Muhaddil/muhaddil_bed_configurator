@@ -18,9 +18,104 @@ local animationData = {
         dict = "anim@gangops@morgue@table@",
         anim = "body_search",
         flag = 1,
-        description = "Bed Position"
+        description = _L('anim_bed')
     },
 }
+
+local function ShowHUD(type, title)
+    SendNUIMessage({
+        action = 'showHUD',
+        type = type,
+        title = title,
+    })
+end
+
+local function updateLocales()
+    SendNUIMessage({
+        action = 'updateLocales',
+        locales = {
+            command_configbed = _L('command_configbed'),
+            command_configpager = _L('command_configpager'),
+            command_confighelp = _L('command_confighelp'),
+
+            already_configuring = _L('already_configuring'),
+            no_permission = _L('no_permission'),
+            config_started = _L('config_started'),
+            config_cancelled = _L('config_cancelled'),
+            config_saved = _L('config_saved'),
+            config_copied = _L('config_copied'),
+
+            instructions_camera = _L('instructions_camera'),
+            instructions_controls = _L('instructions_controls'),
+            instructions_place_monitor = _L('instructions_place_monitor'),
+            instructions_place_pager = _L('instructions_place_pager'),
+
+            bed_save_title = _L('bed_save_title'),
+            bed_normal = _L('bed_normal'),
+            bed_normal_desc = _L('bed_normal_desc'),
+            bed_locked = _L('bed_locked'),
+            bed_locked_desc = _L('bed_locked_desc'),
+            bed_xray = _L('bed_xray'),
+            bed_xray_desc = _L('bed_xray_desc'),
+            bed_ecg = _L('bed_ecg'),
+            bed_ecg_desc = _L('bed_ecg_desc'),
+
+            monitor_saved = _L('monitor_saved'),
+            monitor_cancelled = _L('monitor_cancelled'),
+            pager_saved = _L('pager_saved'),
+            pager_cancelled = _L('pager_cancelled'),
+
+            help_title = _L('help_title'),
+            help_available = _L('help_available'),
+
+            anim_bed = _L('anim_bed'),
+
+            hud_camera_follow = _L('hud_camera_follow'),
+            hud_coords = _L('hud_coords'),
+            hud_monitor = _L('hud_monitor'),
+            hud_pager = _L('hud_pager'),
+
+            label_coordinates = _L('label_coordinates'),
+            label_controls = _L('label_controls'),
+            label_camera = _L('label_camera'),
+            label_wheel_arrows = _L('label_wheel_arrows'),
+            label_up_down = _L('label_up_down'),
+            label_enter = _L('label_enter'),
+            label_esc = _L('label_esc'),
+
+            control_camera_desc = _L('control_camera_desc'),
+            control_rotate_desc = _L('control_rotate_desc'),
+            control_height_desc = _L('control_height_desc'),
+            control_save_desc = _L('control_save_desc'),
+            control_cancel_desc = _L('control_cancel_desc'),
+        }
+    })
+end
+
+local function HideHUD()
+    SendNUIMessage({
+        action = 'hideHUD'
+    })
+end
+
+local function UpdateHUDCoords(x, y, z, h)
+    SendNUIMessage({
+        action = 'updateCoords',
+        x = x,
+        y = y,
+        z = z,
+        h = h
+    })
+end
+
+local function ShowNotification(type, title, message)
+    SendNUIMessage({
+        action = 'showNotification',
+        type = type,
+        title = title,
+        message = message
+    })
+end
 
 function LoadAnimDict(dict)
     while not HasAnimDictLoaded(dict) do
@@ -54,26 +149,8 @@ function SpawnConfigNPC(configType)
     LoadAnimDict(animData.dict)
     TaskPlayAnim(spawnedNPC, animData.dict, animData.anim, 8.0, -8.0, -1, animData.flag, 0, false, false, false)
 
-    ShowInstructions(configType)
-end
-
-function ShowInstructions(configType)
-    local animData = animationData[configType]
-    TriggerEvent('chat:addMessage', {
-        color = { 0, 255, 0 },
-        multiline = true,
-        args = { "Config Tool", string.format("Configuring %s - NPC follows your camera:", animData.description) }
-    })
-    TriggerEvent('chat:addMessage', {
-        color = { 255, 255, 0 },
-        multiline = true,
-        args = { "Controls", "CAMERA: NPC follows where you look | MOUSE WHEEL: Rotate" }
-    })
-    TriggerEvent('chat:addMessage', {
-        color = { 255, 255, 0 },
-        multiline = true,
-        args = { "Controls", "Arrow Keys: Rotate | Q/E: Adjust height | ENTER: Save | ESC: Cancel" }
-    })
+    ShowHUD('bed', string.format(_L('config_started'), animData.description))
+    ShowNotification('info', 'Config Tool', _L('instructions_camera'))
 end
 
 function HandleNPCMovement()
@@ -115,6 +192,9 @@ function HandleNPCMovement()
     if IsControlJustPressed(0, 322) then -- ESC
         CancelConfiguration()
     end
+
+    local entityCoords = GetEntityCoords(spawnedNPC)
+    UpdateHUDCoords(entityCoords.x, entityCoords.y, entityCoords.z, heading)
 end
 
 function GetCameraWorldPosition(entity, distance)
@@ -156,7 +236,6 @@ function GetCameraWorldPosition(entity, distance)
             return true, vector3(rayEnd.x, rayEnd.y, groundCoords)
         else
             return true, vector3(rayEnd.x, rayEnd.y, camCoords.z - 1.0)
-            -- return true, rayEnd
         end
     end
 end
@@ -194,11 +273,11 @@ function SaveConfiguration()
 
     lib.registerContext({
         id = 'bed_save_menu',
-        title = 'Guardar configuración de cama',
+        title = _L('bed_save_title'),
         options = {
             {
-                title = 'Cama normal',
-                description = 'Usable para check-in',
+                title = _L('bed_normal'),
+                description = _L('bed_normal_desc'),
                 icon = 'bed',
                 onSelect = function()
                     bedLocked = false
@@ -207,8 +286,8 @@ function SaveConfiguration()
                 end
             },
             {
-                title = 'Cama bloqueada',
-                description = 'No se podrá usar para check-in',
+                title = _L('bed_locked'),
+                description = _L('bed_locked_desc'),
                 icon = 'ban',
                 onSelect = function()
                     bedLocked = true
@@ -217,8 +296,8 @@ function SaveConfiguration()
                 end
             },
             {
-                title = 'Cama X-Ray',
-                description = 'Spawnea un monitor para rayos X',
+                title = _L('bed_xray'),
+                description = _L('bed_xray_desc'),
                 icon = 'tv',
                 onSelect = function()
                     bedLocked = true
@@ -226,8 +305,8 @@ function SaveConfiguration()
                 end
             },
             {
-                title = 'Cama ECG',
-                description = 'Spawnea un monitor para ECG',
+                title = _L('bed_ecg'),
+                description = _L('bed_ecg_desc'),
                 icon = 'tv',
                 onSelect = function()
                     bedLocked = true
@@ -241,8 +320,12 @@ function SaveConfiguration()
 end
 
 function StartPlacingGenericMonitor(bedCoords, bedHeading, bedModel, monitorModel, type)
-    placingMonitorType = type -- "xray" o "ecg"
+    placingMonitorType = type
     configMode = false
+
+    if not IsModelInCdimage(monitorModel) then
+        print("^1El modelo no existe: " .. monitorModel .. "^0")
+    end
 
     RequestModel(monitorModel)
     while not HasModelLoaded(monitorModel) do
@@ -260,10 +343,8 @@ function StartPlacingGenericMonitor(bedCoords, bedHeading, bedModel, monitorMode
         SetEntityNoCollisionEntity(spawnedMonitor, spawnedNPC, true)
     end
 
-    TriggerEvent('chat:addMessage', {
-        color = { 0, 200, 255 },
-        args = { "Config Tool", "Coloca el monitor (ENTER = Guardar, ESC = Cancelar)" }
-    })
+    ShowHUD('monitor', type:upper() .. ' MONITOR')
+    ShowNotification('info', 'Config Tool', _L('instructions_place_monitor'))
 
     tempBedData = {
         coords = bedCoords,
@@ -316,28 +397,43 @@ function SaveMonitorConfig()
             scale
         )
     elseif placingMonitorType == "ecg" then
-        cfg = string.format(
-            "            {\n" ..
-            "                coords = vector4(%.4f, %.4f, %.4f, %.4f),\n" ..
-            "                bedcoords = vector3(%.4f, %.4f, %.4f),\n" ..
-            "                name = 'ICU 1'\n" ..
-            "            },",
+        local bedCfg = string.format(
+            "{ coords = vector4(%.4f, %.4f, %.4f, %.4f), taken = false, model = '%s', getOutOffset = 1.3, lockedBed = true },",
+            tempBedData.coords.x, tempBedData.coords.y, tempBedData.coords.z - 1.0, tempBedData.heading,
+            tempBedData.model
+        )
+
+        local monitorCfg = string.format(
+            "{\n" ..
+            "    coords = vector4(%.4f, %.4f, %.4f, %.4f),\n" ..
+            "    bedcoords = vector3(%.4f, %.4f, %.4f),\n" ..
+            "    name = 'ICU 1'\n" ..
+            "},",
             monitorCoords.x, monitorCoords.y, monitorCoords.z, monitorRot.z,
             tempBedData.coords.x, tempBedData.coords.y, tempBedData.coords.z - 1.0
         )
+
+        cfg = "-- BED CONFIGURATION:\n" .. bedCfg .. "\n\n-- ECG MONITOR CONFIGURATION:\n" .. monitorCfg
+
+        print("\n=== ECG CONFIGURATION ===")
+        print("Copy this bed config to your beds table:")
+        print(bedCfg)
+        print("\nCopy this monitor config to your ECGMonitor table:")
+        print(monitorCfg)
+        print("========================\n")
     end
 
-    print(cfg)
-    if lib and lib.setClipboard then lib.setClipboard(cfg) end
+    if lib and lib.setClipboard then
+        lib.setClipboard(cfg)
+    end
 
-    TriggerEvent('chat:addMessage', {
-        color = { 0, 255, 0 },
-        args = { "Config Tool", "Configuración " .. placingMonitorType .. " guardada! (F8 para copiar)" }
-    })
+    ShowNotification('success', 'Config Tool', string.format(_L('monitor_saved'), placingMonitorType:upper()))
 
     _restoreMonitorPhysics()
     CleanupConfiguration()
-    if spawnedMonitor then DeleteEntity(spawnedMonitor) end
+    if spawnedMonitor then
+        DeleteEntity(spawnedMonitor)
+    end
     spawnedMonitor, placingMonitorType = nil, nil
 end
 
@@ -358,26 +454,29 @@ function HandleMonitorPlacement()
         SetEntityHeading(spawnedMonitor, heading - rotationSpeed)
     end
 
-    if IsControlPressed(0, 172) then -- Up Arrow
+    if IsControlPressed(0, 172) then
         verticalOffset = verticalOffset + moveSpeed
     end
-    if IsControlPressed(0, 173) then -- Down Arrow
+    if IsControlPressed(0, 173) then
         verticalOffset = verticalOffset - moveSpeed
     end
 
-    if IsControlPressed(0, 174) then -- Left Arrow
+    if IsControlPressed(0, 174) then
         SetEntityHeading(spawnedMonitor, heading - rotationSpeed)
     end
-    if IsControlPressed(0, 175) then -- Right Arrow
+    if IsControlPressed(0, 175) then
         SetEntityHeading(spawnedMonitor, heading + rotationSpeed)
     end
 
-    if IsControlJustPressed(0, 191) then -- ENTER
+    if IsControlJustPressed(0, 191) then
         SaveMonitorConfig()
     end
-    if IsControlJustPressed(0, 322) then -- ESC
+    if IsControlJustPressed(0, 322) then
         CancelMonitorPlacement()
     end
+
+    local monitorCoords = GetEntityCoords(spawnedMonitor)
+    UpdateHUDCoords(monitorCoords.x, monitorCoords.y, monitorCoords.z, heading)
 end
 
 function CancelMonitorPlacement()
@@ -388,7 +487,7 @@ function CancelMonitorPlacement()
     spawnedMonitor, placingMonitorType = nil, nil
     tempBedData = nil
     CleanupConfiguration()
-    TriggerEvent('chat:addMessage', { color = { 255, 0, 0 }, args = { "Config Tool", "Monitor cancelado." } })
+    ShowNotification('error', 'Config Tool', _L('monitor_cancelled'))
 end
 
 function PrintBedConfig(coords, heading, modelHash)
@@ -401,27 +500,16 @@ function PrintBedConfig(coords, heading, modelHash)
 
     print(configText)
 
-    TriggerEvent('chat:addMessage', {
-        color = { 0, 255, 0 },
-        multiline = true,
-        args = { "Config Tool", "Configuración guardada! Mira la consola (F8)." }
-    })
+    ShowNotification('success', 'Config Tool', _L('config_saved'))
 
     if lib and lib.setClipboard then
         lib.setClipboard(configText)
-        TriggerEvent('chat:addMessage', {
-            color = { 0, 200, 255 },
-            args = { "Config Tool", "Configuración copiada al portapapeles!" }
-        })
+        ShowNotification('info', 'Config Tool', _L('config_copied'))
     end
 end
 
 function CancelConfiguration()
-    TriggerEvent('chat:addMessage', {
-        color = { 255, 0, 0 },
-        multiline = true,
-        args = { "Config Tool", "Configuration cancelled." }
-    })
+    ShowNotification('error', 'Config Tool', _L('config_cancelled'))
     CleanupConfiguration()
 end
 
@@ -435,6 +523,7 @@ function CleanupConfiguration()
     configType = nil
     originalCoords = nil
     verticalOffset = 0.0
+    HideHUD()
 end
 
 RegisterCommand('configbed', function()
@@ -443,10 +532,7 @@ end)
 
 RegisterNetEvent("configTool:startConfig", function(type)
     if configMode then
-        TriggerEvent('chat:addMessage', {
-            color = { 255, 0, 0 },
-            args = { "Config Tool", "Ya estás en modo configuración! Usa ESC para cancelar." }
-        })
+        ShowNotification('warning', 'Config Tool', _L('already_configuring'))
         return
     end
 
@@ -456,10 +542,7 @@ RegisterNetEvent("configTool:startConfig", function(type)
 end)
 
 RegisterNetEvent("configTool:denied", function()
-    TriggerEvent('chat:addMessage', {
-        color = { 255, 0, 0 },
-        args = { "Config Tool", "No tienes permisos para usar este comando." }
-    })
+    ShowNotification('error', 'Config Tool', _L('no_permission'))
 end)
 
 RegisterCommand('confighelp', function(source, args, rawCommand)
@@ -467,31 +550,17 @@ RegisterCommand('confighelp', function(source, args, rawCommand)
 end, false)
 
 RegisterNetEvent("configTool:helpCommand", function()
-    TriggerEvent('chat:addMessage', {
-        color = { 0, 255, 255 },
-        multiline = true,
-        args = { "Config Tool Help", "Available commands:" }
-    })
-    TriggerEvent('chat:addMessage', {
-        color = { 255, 255, 255 },
-        multiline = true,
-        args = { "", "/configbed - Configure bed positions" }
-    })
-    TriggerEvent('chat:addMessage', {
-        color = { 255, 255, 255 },
-        multiline = true,
-        args = { "", "/configpager - Configure pager screen positions" }
-    })
-    TriggerEvent('chat:addMessage', {
-        color = { 255, 255, 255 },
-        multiline = true,
-        args = { "", "/confighelp - Show this help message" }
-    })
+    ShowNotification('info', _L('help_title'),
+        _L('help_available') ..
+        '\n/configbed - ' ..
+        _L('command_configbed') ..
+        '\n/configpager - ' .. _L('command_configpager') .. '\n/confighelp - ' .. _L('command_confighelp'))
 end, false)
 
 AddEventHandler('onResourceStop', function(resourceName)
     if GetCurrentResourceName() == resourceName then
         CleanupConfiguration()
+        HideHUD()
     end
 end)
 
@@ -501,10 +570,7 @@ end, false)
 
 RegisterNetEvent("configTool:startConfigPager", function(type)
     if configMode then
-        TriggerEvent('chat:addMessage', {
-            color = { 255, 0, 0 },
-            args = { "Config Tool", "Ya estás en modo configuración! Usa ESC para cancelar." }
-        })
+        ShowNotification('warning', 'Config Tool', _L('already_configuring'))
         return
     end
 
@@ -530,10 +596,8 @@ function StartPlacingPagerScreen()
     SetEntityDynamic(spawnedPager, false)
     FreezeEntityPosition(spawnedPager, true)
 
-    TriggerEvent('chat:addMessage', {
-        color = { 0, 200, 255 },
-        args = { "Config Tool", "Coloca la pantalla (ENTER = Guardar, ESC = Cancelar)" }
-    })
+    ShowHUD('pager', 'PAGER SCREEN')
+    ShowNotification('info', 'Config Tool', _L('instructions_place_pager'))
 end
 
 function HandlePagerScreenPlacement()
@@ -550,19 +614,22 @@ function HandlePagerScreenPlacement()
     if IsControlPressed(0, 172) then verticalOffset = verticalOffset + moveSpeed end
     if IsControlPressed(0, 173) then verticalOffset = verticalOffset - moveSpeed end
 
-    if IsControlPressed(0, 174) then -- Left Arrow
+    if IsControlPressed(0, 174) then
         SetEntityHeading(spawnedPager, heading - rotationSpeed)
     end
-    if IsControlPressed(0, 175) then -- Right Arrow
+    if IsControlPressed(0, 175) then
         SetEntityHeading(spawnedPager, heading + rotationSpeed)
     end
 
-    if IsControlJustPressed(0, 191) then -- ENTER
+    if IsControlJustPressed(0, 191) then
         SavePagerScreenConfig()
     end
-    if IsControlJustPressed(0, 322) then -- ESC
+    if IsControlJustPressed(0, 322) then
         CancelPagerScreenPlacement()
     end
+
+    local pagerCoords = GetEntityCoords(spawnedPager)
+    UpdateHUDCoords(pagerCoords.x, pagerCoords.y, pagerCoords.z, heading)
 end
 
 function SavePagerScreenConfig()
@@ -586,13 +653,11 @@ IncomingScreenSoundPos = {
     print(cfg)
     if lib and lib.setClipboard then lib.setClipboard(cfg) end
 
-    TriggerEvent('chat:addMessage', {
-        color = { 0, 255, 0 },
-        args = { "Config Tool", "Posiciones de pantalla guardadas! (F8 / portapapeles)" }
-    })
+    ShowNotification('success', 'Config Tool', _L('pager_saved'))
 
     DeleteEntity(spawnedPager)
     spawnedPager, placingPagerScreen = nil, false
+    HideHUD()
 end
 
 function CancelPagerScreenPlacement()
@@ -600,7 +665,8 @@ function CancelPagerScreenPlacement()
         DeleteEntity(spawnedPager)
     end
     spawnedPager, placingPagerScreen = nil, false
-    TriggerEvent('chat:addMessage', { color = { 255, 0, 0 }, args = { "Config Tool", "Colocación cancelada." } })
+    HideHUD()
+    ShowNotification('error', 'Config Tool', _L('pager_cancelled'))
 end
 
 Citizen.CreateThread(function()
@@ -610,60 +676,23 @@ Citizen.CreateThread(function()
         if configMode then
             waitTime = 0
             HandleNPCMovement()
-
-            SetTextFont(4)
-            SetTextScale(0.5, 0.5)
-            SetTextColour(255, 255, 255, 255)
-            SetTextOutline()
-            SetTextEntry("STRING")
-            AddTextComponentString("CAMERA: Follow | WHEEL/Arrows: Rotate | Q/E: Height")
-            DrawText(0.1, 0.1)
-
-            if spawnedNPC and DoesEntityExist(spawnedNPC) then
-                local coords = GetEntityCoords(spawnedNPC)
-                local heading = GetEntityHeading(spawnedNPC)
-
-                SetTextFont(4)
-                SetTextScale(0.4, 0.4)
-                SetTextColour(0, 255, 0, 255)
-                SetTextOutline()
-                SetTextEntry("STRING")
-                AddTextComponentString(string.format("X: %.3f | Y: %.3f | Z: %.3f | H: %.2f", coords.x, coords.y,
-                    coords.z, heading))
-                DrawText(0.1, 0.15)
-            end
         elseif placingMonitorType and spawnedMonitor and DoesEntityExist(spawnedMonitor) then
             waitTime = 0
-            local coords = GetEntityCoords(spawnedMonitor)
-            local heading = GetEntityHeading(spawnedMonitor)
-
-            SetTextFont(4)
-            SetTextScale(0.4, 0.4)
-            SetTextColour(0, 200, 255, 255)
-            SetTextOutline()
-            SetTextEntry("STRING")
-            AddTextComponentString(string.format("MONITOR - X: %.3f | Y: %.3f | Z: %.3f | H: %.2f", coords.x, coords.y,
-                coords.z, heading))
-            DrawText(0.1, 0.15)
-
             HandleMonitorPlacement()
         elseif placingPagerScreen and spawnedPager and DoesEntityExist(spawnedPager) then
             waitTime = 0
-            local coords = GetEntityCoords(spawnedPager)
-            local heading = GetEntityHeading(spawnedPager)
-
-            SetTextFont(4)
-            SetTextScale(0.4, 0.4)
-            SetTextColour(255, 200, 0, 255)
-            SetTextOutline()
-            SetTextEntry("STRING")
-            AddTextComponentString(string.format("PAGER - X: %.3f | Y: %.3f | Z: %.3f | H: %.2f", coords.x, coords.y,
-                coords.z, heading))
-            DrawText(0.1, 0.15)
-
             HandlePagerScreenPlacement()
         end
 
         Citizen.Wait(waitTime)
     end
+end)
+
+AddEventHandler('onClientResourceStart', function(resourceName)
+    if (GetCurrentResourceName() ~= resourceName) then
+        return
+    end
+
+    Wait(1000)
+    updateLocales()
 end)
