@@ -396,6 +396,10 @@ function SaveMonitorConfig()
             monitorRot.x, monitorRot.y, adjustedRotZ,
             scale
         )
+
+        if lib and lib.setClipboard then
+            lib.setClipboard(cfg)
+        end
     elseif placingMonitorType == "ecg" then
         local bedCfg = string.format(
             "{ coords = vector4(%.4f, %.4f, %.4f, %.4f), taken = false, model = '%s', getOutOffset = 1.3, lockedBed = true },",
