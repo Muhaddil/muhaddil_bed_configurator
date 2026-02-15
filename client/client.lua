@@ -144,6 +144,17 @@ function SpawnConfigNPC(configType)
     SetEntityInvincible(spawnedNPC, true)
     FreezeEntityPosition(spawnedNPC, true)
     SetBlockingOfNonTemporaryEvents(spawnedNPC, true)
+    SetEntityCollision(spawnedNPC, false, false)
+    SetPedCanRagdoll(spawnedNPC, false)
+    SetPedCanBeTargetted(spawnedNPC, false)
+    SetPedCanBeKnockedOffVehicle(spawnedNPC, 1)
+    SetPedFleeAttributes(spawnedNPC, 0, false)
+    SetPedCombatAttributes(spawnedNPC, 17, true)
+    SetPedSeeingRange(spawnedNPC, 0.0)
+    SetPedHearingRange(spawnedNPC, 0.0)
+    SetPedAlertness(spawnedNPC, 0)
+    SetPedKeepTask(spawnedNPC, true)
+    TaskSetBlockingOfNonTemporaryEvents(spawnedNPC, true)
 
     local animData = animationData[configType]
     LoadAnimDict(animData.dict)
@@ -199,43 +210,64 @@ end
 
 function GetCameraWorldPosition(entity, distance)
     distance = distance or 100.0
-
+    
     local camCoords = GetGameplayCamCoord()
     local camRot = GetGameplayCamRot(2)
-
+    
+    if not camCoords or not camRot then
+        return false, nil
+    end
+    
     local rotX = math.rad(camRot.x)
     local rotZ = math.rad(camRot.z)
-
+    
     local dirX = -math.sin(rotZ) * math.cos(rotX)
     local dirY = math.cos(rotZ) * math.cos(rotX)
     local dirZ = math.sin(rotX)
-
+    
     local rayEnd = vector3(
         camCoords.x + dirX * distance,
         camCoords.y + dirY * distance,
         camCoords.z + dirZ * distance
     )
-
-    if not entity then return end
-
+    
+    if not entity then 
+        return false, nil 
+    end
+    
+    if not DoesEntityExist(entity) then
+        return false, nil
+    end
+    
     local rayHandle = StartExpensiveSynchronousShapeTestLosProbe(
         camCoords.x, camCoords.y, camCoords.z,
         rayEnd.x, rayEnd.y, rayEnd.z,
-        -1,
+        511,
         entity,
-        4
+        7
     )
-
-    local _, hit, endCoords, _, _ = GetShapeTestResult(rayHandle)
-
+    
+    local _, hit, endCoords, _, materialHash, entityHit = GetShapeTestResultIncludingMaterial(rayHandle)
+    
     if hit == 1 then
         return true, endCoords
     else
-        local foundGround, groundCoords = GetGroundZFor_3dCoord(rayEnd.x, rayEnd.y, rayEnd.z + 50.0, false)
+        local foundGround, groundZ = GetGroundZFor_3dCoord(rayEnd.x, rayEnd.y, rayEnd.z + 100.0, false)
+        
         if foundGround then
-            return true, vector3(rayEnd.x, rayEnd.y, groundCoords)
+            return true, vector3(rayEnd.x, rayEnd.y, groundZ)
         else
-            return true, vector3(rayEnd.x, rayEnd.y, camCoords.z - 1.0)
+            local safeZ = camCoords.z - 1.0
+            
+            for i = 0, 50, 10 do
+                foundGround, groundZ = GetGroundZFor_3dCoord(rayEnd.x, rayEnd.y, camCoords.z + i, false)
+                if foundGround then
+                    safeZ = groundZ
+                    break
+                end
+            end
+            
+            return true, vector3(rayEnd.x, rayEnd.y, safeZ)
         end
     end
 end
@@ -366,25 +398,11 @@ function SaveMonitorConfig()
     if not tempBedData then return end
 
     local monitorCoords = GetEntityCoords(spawnedMonitor)
-    local monitorRot = GetEntityRotation(spawnedMonitor, 1)
 
     local cfg
     if placingMonitorType == "xray" then
+        local monitorRot = GetEntityRotation(spawnedMonitor, 2)
         local adjustedRotZ = monitorRot.z % 360
-
-        local radians = math.rad(monitorRot.z)
-
-        local leftOffset = Config.leftOffset
-        local offsetXLeft = leftOffset * math.sin(radians)
-        local offsetYLeft = -leftOffset * math.cos(radians)
-
-        local backOffset = Config.backOffset
-        local offsetXBack = -backOffset * math.sin(radians)
-        local offsetYBack = -backOffset * math.cos(radians)
-
-        local adjustedX = monitorCoords.x + offsetXLeft + offsetXBack
-        local adjustedY = monitorCoords.y + offsetYLeft + offsetYBack
-        local adjustedZ = monitorCoords.z + 0.5
 
         local scale = Config.scale
 
@@ -392,10 +410,15 @@ function SaveMonitorConfig()
             "{ coords = vector4(%.4f, %.4f, %.4f, %.4f), taken = false, model = '%s', getOutOffset = 1.3, xray = true, xrayMonitor = vector3(%.4f, %.4f, %.4f), xrayMonitorRot = vector3(%.1f, %.1f, %.1f), screenScale = %s, lockedBed = true },",
             tempBedData.coords.x, tempBedData.coords.y, tempBedData.coords.z - 1.0, tempBedData.heading,
             tempBedData.model,
-            adjustedX, adjustedY, adjustedZ,
+            monitorCoords.x, monitorCoords.y, monitorCoords.z,  -- SIN ajustes
             monitorRot.x, monitorRot.y, adjustedRotZ,
             scale
         )
+
+        print("\n=== XRAY CONFIGURATION ===")
+        print("Copy this config to your beds table:")
+        print(cfg)
+        print("==========================\n")
 
         if lib and lib.setClipboard then
             lib.setClipboard(cfg)
@@ -446,7 +469,27 @@ function HandleMonitorPlacement()
 
     local hit, coords = GetCameraWorldPosition(spawnedMonitor)
     if hit and coords then
-        SetEntityCoords(spawnedMonitor, coords.x, coords.y, coords.z + verticalOffset, false, false, false, true)
+        if placingMonitorType == "xray" then
+            local heading = GetEntityHeading(spawnedMonitor)
+            local radians = math.rad(heading)
+            
+            local rightOffset = Config.cornerOffsetRight or 0.25 
+            local backOffset = Config.cornerOffsetBack or 0.15
+            local topOffset = Config.cornerOffsetTop or 0.4
+            
+            local offsetX = (rightOffset * math.cos(radians)) - (backOffset * math.sin(radians))
+            local offsetY = (rightOffset * math.sin(radians)) + (backOffset * math.cos(radians))
+            
+            SetEntityCoords(
+                spawnedMonitor, 
+                coords.x - offsetX, 
+                coords.y - offsetY, 
+                coords.z - topOffset, 
+                false, false, false, true
+            )
+        else
+            SetEntityCoords(spawnedMonitor, coords.x, coords.y, coords.z + verticalOffset, false, false, false, true)
+        end
     end
 
     local heading = GetEntityHeading(spawnedMonitor)

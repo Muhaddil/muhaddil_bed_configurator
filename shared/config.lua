@@ -16,6 +16,6 @@ Config.AllowedGroups = {
     ace = { "bedconfigurator" }      -- ACE permissions
 }
 
--- You should not need to change anything below this line
-Config.backOffset = 0.2 -- How far back the xray is placed from the monitor
-Config.leftOffset = 0.3 -- How far left the xray is placed from the monitor
+Config.cornerOffsetRight = 0.35 
+Config.cornerOffsetBack = 0.0
+Config.cornerOffsetTop = 0.6
