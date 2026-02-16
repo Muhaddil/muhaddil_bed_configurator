@@ -4,7 +4,7 @@ lua54 'yes'
 
 author 'Muhaddil'
 description 'A simple NPC bed configurator for FiveM'
-version 'v0.0.93-beta'
+version 'v0.0.931-beta'
 
 ui_page 'html/build/index.html'
 

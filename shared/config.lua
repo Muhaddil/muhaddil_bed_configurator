@@ -19,3 +19,6 @@ Config.AllowedGroups = {
 Config.cornerOffsetRight = 0.35 
 Config.cornerOffsetBack = 0.0
 Config.cornerOffsetTop = 0.6
+
+Config.ECGRotationOrder = 2
+Config.XRAYRotationOrder = 2

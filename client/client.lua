@@ -401,7 +401,7 @@ function SaveMonitorConfig()
 
     local cfg
     if placingMonitorType == "xray" then
-        local monitorRot = GetEntityRotation(spawnedMonitor, 2)
+        local monitorRot = GetEntityRotation(spawnedMonitor, Config.XRAYRotationOrder)
         local adjustedRotZ = monitorRot.z % 360
 
         local scale = Config.scale
@@ -424,6 +424,8 @@ function SaveMonitorConfig()
             lib.setClipboard(cfg)
         end
     elseif placingMonitorType == "ecg" then
+        local monitorRot = GetEntityRotation(spawnedMonitor, Config.ECGRotationOrder)
+
         local bedCfg = string.format(
             "{ coords = vector4(%.4f, %.4f, %.4f, %.4f), taken = false, model = '%s', getOutOffset = 1.3, lockedBed = true },",
             tempBedData.coords.x, tempBedData.coords.y, tempBedData.coords.z - 1.0, tempBedData.heading,
