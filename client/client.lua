@@ -12,6 +12,16 @@ local tempBedData = nil
 local placingMonitorType = nil
 local spawnedPager = nil
 local placingPagerScreen = false
+local snapToSurface = false
+local surfaceNormal = nil
+local lastValidPosition = nil
+local positionHistory = {}
+local maxHistorySize = 10
+local showDebugInfo = false
+local gridSnapEnabled = false
+local gridSize = 0.1
+local manualRotation = 0.0
+local manualPitch = 0.0
 
 local animationData = {
     bed = {
@@ -37,19 +47,16 @@ local function updateLocales()
             command_configbed = _L('command_configbed'),
             command_configpager = _L('command_configpager'),
             command_confighelp = _L('command_confighelp'),
-
             already_configuring = _L('already_configuring'),
             no_permission = _L('no_permission'),
             config_started = _L('config_started'),
             config_cancelled = _L('config_cancelled'),
             config_saved = _L('config_saved'),
             config_copied = _L('config_copied'),
-
             instructions_camera = _L('instructions_camera'),
             instructions_controls = _L('instructions_controls'),
             instructions_place_monitor = _L('instructions_place_monitor'),
             instructions_place_pager = _L('instructions_place_pager'),
-
             bed_save_title = _L('bed_save_title'),
             bed_normal = _L('bed_normal'),
             bed_normal_desc = _L('bed_normal_desc'),
@@ -59,22 +66,17 @@ local function updateLocales()
             bed_xray_desc = _L('bed_xray_desc'),
             bed_ecg = _L('bed_ecg'),
             bed_ecg_desc = _L('bed_ecg_desc'),
-
             monitor_saved = _L('monitor_saved'),
             monitor_cancelled = _L('monitor_cancelled'),
             pager_saved = _L('pager_saved'),
             pager_cancelled = _L('pager_cancelled'),
-
             help_title = _L('help_title'),
             help_available = _L('help_available'),
-
             anim_bed = _L('anim_bed'),
-
             hud_camera_follow = _L('hud_camera_follow'),
             hud_coords = _L('hud_coords'),
             hud_monitor = _L('hud_monitor'),
             hud_pager = _L('hud_pager'),
-
             label_coordinates = _L('label_coordinates'),
             label_controls = _L('label_controls'),
             label_camera = _L('label_camera'),
@@ -82,12 +84,28 @@ local function updateLocales()
             label_up_down = _L('label_up_down'),
             label_enter = _L('label_enter'),
             label_esc = _L('label_esc'),
-
             control_camera_desc = _L('control_camera_desc'),
             control_rotate_desc = _L('control_rotate_desc'),
             control_height_desc = _L('control_height_desc'),
             control_save_desc = _L('control_save_desc'),
             control_cancel_desc = _L('control_cancel_desc'),
+            label_fine_height = _L('label_fine_height'),
+            control_fine_height_desc = _L('control_fine_height_desc'),
+            label_snap_surface = _L('label_snap_surface'),
+            control_snap_surface_key = _L('control_snap_surface_key'),
+            label_grid_snap = _L('label_grid_snap'),
+            control_grid_snap_key = _L('control_grid_snap_key'),
+            label_debug_info = _L('label_debug_info'),
+            control_debug_info_key = _L('control_debug_info_key'),
+            debug_pos = _L('debug_pos'),
+            debug_head = _L('debug_head'),
+            debug_rot = _L('debug_rot'),
+            debug_snap = _L('debug_snap'),
+            debug_grid = _L('debug_grid'),
+            debug_history = _L('debug_history'),
+            debug_normal = _L('debug_normal'),
+            status_on = _L('status_on'),
+            status_off = _L('status_off'),
         }
     })
 end
@@ -115,6 +133,83 @@ local function ShowNotification(type, title, message)
         title = title,
         message = message
     })
+end
+
+local function SavePositionToHistory(coords, heading)
+    table.insert(positionHistory, {
+        coords = coords,
+        heading = heading,
+        timestamp = GetGameTimer()
+    })
+
+    if #positionHistory > maxHistorySize then
+        table.remove(positionHistory, 1)
+    end
+end
+
+local function UndoLastPosition(entity)
+    if #positionHistory > 1 then
+        table.remove(positionHistory)
+        local lastPos = positionHistory[#positionHistory]
+
+        if lastPos then
+            SetEntityCoords(entity, lastPos.coords.x, lastPos.coords.y, lastPos.coords.z, false, false, false, true)
+            SetEntityHeading(entity, lastPos.heading)
+            ShowNotification('info', 'Config Tool', 'Position restored (Undo)')
+            return true
+        end
+    end
+
+    ShowNotification('warning', 'Config Tool', 'No previous position available')
+    return false
+end
+
+local function DrawDebugInfo(entity, surfaceInfo)
+    if not showDebugInfo then
+        SendNUIMessage({
+            action = 'updateDebug',
+            debugData = nil
+        })
+        return
+    end
+
+    local coords = GetEntityCoords(entity)
+    local heading = GetEntityHeading(entity)
+    local rotation = GetEntityRotation(entity, 2)
+
+    SendNUIMessage({
+        action = 'updateDebug',
+        debugData = {
+            coords = { x = coords.x, y = coords.y, z = coords.z },
+            heading = heading,
+            rotation = { x = rotation.x, y = rotation.y, z = rotation.z },
+            snapToSurface = snapToSurface,
+            gridSnapEnabled = gridSnapEnabled,
+            historyCount = #positionHistory,
+            maxHistory = maxHistorySize,
+            surfaceNormal = surfaceInfo and { x = surfaceInfo.x, y = surfaceInfo.y, z = surfaceInfo.z } or nil
+        }
+    })
+
+    local camCoords = GetGameplayCamCoord()
+    DrawLine(camCoords.x, camCoords.y, camCoords.z, coords.x, coords.y, coords.z, 0, 255, 0, 150)
+
+    DrawMarker(28, coords.x, coords.y, coords.z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.1, 0.1, 0, 255, 0, 100, false,
+        false, 2, false, nil, nil, false)
+
+    if surfaceInfo then
+        local normalEnd = vector3(
+            coords.x + surfaceInfo.x * 0.5,
+            coords.y + surfaceInfo.y * 0.5,
+            coords.z + surfaceInfo.z * 0.5
+        )
+        DrawLine(coords.x, coords.y, coords.z, normalEnd.x, normalEnd.y, normalEnd.z, 255, 0, 0, 200)
+    end
+end
+
+local function SnapToGrid(value)
+    if not gridSnapEnabled then return value end
+    return math.floor(value / gridSize + 0.5) * gridSize
 end
 
 function LoadAnimDict(dict)
@@ -169,106 +264,189 @@ function HandleNPCMovement()
         return
     end
 
-    local hit, coords = GetCameraWorldPosition(spawnedNPC)
+    local hit, coords, normal, material = GetCameraWorldPosition(spawnedNPC)
+
     if hit and coords then
-        SetEntityCoords(spawnedNPC, coords.x, coords.y, coords.z + verticalOffset, false, false, false, true)
+        if gridSnapEnabled then
+            coords = vector3(
+                SnapToGrid(coords.x),
+                SnapToGrid(coords.y),
+                SnapToGrid(coords.z)
+            )
+        end
+
+        local finalZ = coords.z + verticalOffset
+        SetEntityCoords(spawnedNPC, coords.x, coords.y, finalZ, false, false, false, true)
+
+        if normal then
+            surfaceNormal = normal
+        end
+
+        lastValidPosition = vector3(coords.x, coords.y, finalZ)
     end
 
     local heading = GetEntityHeading(spawnedNPC)
+    local entityCoords = GetEntityCoords(spawnedNPC)
 
-    if IsControlPressed(0, 241) then -- Mouse Wheel Up
+    if IsControlPressed(0, 241) then
         SetEntityHeading(spawnedNPC, heading + rotationSpeed)
     end
-    if IsControlPressed(0, 242) then -- Mouse Wheel Down
+    if IsControlPressed(0, 242) then
         SetEntityHeading(spawnedNPC, heading - rotationSpeed)
     end
-
-    if IsControlPressed(0, 172) then -- Up Arrow
+    if IsControlPressed(0, 172) then
         verticalOffset = verticalOffset + moveSpeed
     end
-    if IsControlPressed(0, 173) then -- Down Arrow
+    if IsControlPressed(0, 173) then
         verticalOffset = verticalOffset - moveSpeed
     end
-
-    if IsControlPressed(0, 174) then -- Left Arrow
+    if IsControlPressed(0, 174) then
         SetEntityHeading(spawnedNPC, heading - rotationSpeed)
     end
-    if IsControlPressed(0, 175) then -- Right Arrow
+    if IsControlPressed(0, 175) then
         SetEntityHeading(spawnedNPC, heading + rotationSpeed)
     end
 
-    if IsControlJustPressed(0, 191) then -- ENTER
+    if IsControlJustPressed(0, 288) then
+        snapToSurface = not snapToSurface
+        ShowNotification('info', 'Config Tool', 'Snap to Surface: ' .. (snapToSurface and 'ENABLED' or 'DISABLED'))
+    end
+
+    if IsControlJustPressed(0, 289) then
+        gridSnapEnabled = not gridSnapEnabled
+        ShowNotification('info', 'Config Tool', 'Grid Snap: ' .. (gridSnapEnabled and 'ENABLED' or 'DISABLED'))
+    end
+
+    if IsControlJustPressed(0, 170) then
+        showDebugInfo = not showDebugInfo
+        ShowNotification('info', 'Config Tool', 'Debug Info: ' .. (showDebugInfo and 'ENABLED' or 'DISABLED'))
+    end
+
+    if IsControlPressed(0, 36) and IsControlJustPressed(0, 20) then
+        UndoLastPosition(spawnedNPC)
+    end
+
+    if IsControlPressed(0, 10) then
+        verticalOffset = verticalOffset + (moveSpeed * 0.1)
+    end
+    if IsControlPressed(0, 11) then
+        verticalOffset = verticalOffset - (moveSpeed * 0.1)
+    end
+
+    if IsControlPressed(0, 21) then
+        local fastRotation = rotationSpeed * 3
+        if IsControlPressed(0, 174) then
+            SetEntityHeading(spawnedNPC, heading - fastRotation)
+        end
+        if IsControlPressed(0, 175) then
+            SetEntityHeading(spawnedNPC, heading + fastRotation)
+        end
+    end
+
+    if GetGameTimer() % 1000 < 50 then
+        SavePositionToHistory(entityCoords, heading)
+    end
+
+    if IsControlJustPressed(0, 191) then
         SaveConfiguration()
     end
-    if IsControlJustPressed(0, 322) then -- ESC
+    if IsControlJustPressed(0, 322) then
         CancelConfiguration()
     end
 
-    local entityCoords = GetEntityCoords(spawnedNPC)
     UpdateHUDCoords(entityCoords.x, entityCoords.y, entityCoords.z, heading)
+    DrawDebugInfo(spawnedNPC, surfaceNormal)
 end
 
 function GetCameraWorldPosition(entity, distance)
     distance = distance or 100.0
-    
+
     local camCoords = GetGameplayCamCoord()
     local camRot = GetGameplayCamRot(2)
-    
+
     if not camCoords or not camRot then
         return false, nil
     end
-    
+
     local rotX = math.rad(camRot.x)
     local rotZ = math.rad(camRot.z)
-    
+
     local dirX = -math.sin(rotZ) * math.cos(rotX)
     local dirY = math.cos(rotZ) * math.cos(rotX)
     local dirZ = math.sin(rotX)
-    
+
     local rayEnd = vector3(
         camCoords.x + dirX * distance,
         camCoords.y + dirY * distance,
         camCoords.z + dirZ * distance
     )
-    
-    if not entity then 
-        return false, nil 
+
+    if not entity then
+        return false, nil
     end
-    
+
     if not DoesEntityExist(entity) then
         return false, nil
     end
-    
-    local rayHandle = StartExpensiveSynchronousShapeTestLosProbe(
+
+    local rayHandle = StartShapeTestRay(
         camCoords.x, camCoords.y, camCoords.z,
         rayEnd.x, rayEnd.y, rayEnd.z,
-        511,
+        -1,
         entity,
         7
     )
-    
-    local _, hit, endCoords, _, materialHash, entityHit = GetShapeTestResultIncludingMaterial(rayHandle)
-    
+
+    local _, hit, endCoords, surfaceNormal, materialHash, entityHit = GetShapeTestResultIncludingMaterial(rayHandle)
+
     if hit == 1 then
-        return true, endCoords
-    else
-        local foundGround, groundZ = GetGroundZFor_3dCoord(rayEnd.x, rayEnd.y, rayEnd.z + 100.0, false)
-        
-        if foundGround then
-            return true, vector3(rayEnd.x, rayEnd.y, groundZ)
-        else
-            local safeZ = camCoords.z - 1.0
-            
-            for i = 0, 50, 10 do
-                foundGround, groundZ = GetGroundZFor_3dCoord(rayEnd.x, rayEnd.y, camCoords.z + i, false)
-                if foundGround then
-                    safeZ = groundZ
-                    break
-                end
-            end
-            
-            return true, vector3(rayEnd.x, rayEnd.y, safeZ)
+        if surfaceNormal and (surfaceNormal.x ~= 0 or surfaceNormal.y ~= 0 or surfaceNormal.z ~= 0) then
+            local offsetAmount = 0.01
+            endCoords = vector3(
+                endCoords.x + (surfaceNormal.x * offsetAmount),
+                endCoords.y + (surfaceNormal.y * offsetAmount),
+                endCoords.z + (surfaceNormal.z * offsetAmount)
+            )
         end
+
+        return true, endCoords, surfaceNormal, materialHash
+    else
+        local fallbackDistance = 3.0
+
+        local shortRayHandle = StartShapeTestRay(
+            camCoords.x, camCoords.y, camCoords.z,
+            camCoords.x + dirX * fallbackDistance,
+            camCoords.y + dirY * fallbackDistance,
+            camCoords.z + dirZ * fallbackDistance,
+            -1,
+            entity,
+            7
+        )
+
+        local _, shortHit, shortCoords = GetShapeTestResult(shortRayHandle)
+
+        if shortHit == 1 then
+            return true, shortCoords, nil, nil
+        end
+
+        local fallbackCoords = vector3(
+            camCoords.x + dirX * fallbackDistance,
+            camCoords.y + dirY * fallbackDistance,
+            camCoords.z + dirZ * fallbackDistance
+        )
+
+        local foundGround, groundZ = GetGroundZFor_3dCoord(
+            fallbackCoords.x,
+            fallbackCoords.y,
+            fallbackCoords.z + 2.0,
+            false
+        )
+
+        if foundGround then
+            return true, vector3(fallbackCoords.x, fallbackCoords.y, groundZ), nil, nil
+        end
+
+        return true, fallbackCoords, nil, nil
     end
 end
 
@@ -354,6 +532,9 @@ end
 function StartPlacingGenericMonitor(bedCoords, bedHeading, bedModel, monitorModel, type)
     placingMonitorType = type
     configMode = false
+    verticalOffset = 0.0
+    manualRotation = 0.0
+    manualPitch = 0.0
 
     if not IsModelInCdimage(monitorModel) then
         print("^1El modelo no existe: " .. monitorModel .. "^0")
@@ -410,7 +591,7 @@ function SaveMonitorConfig()
             "{ coords = vector4(%.4f, %.4f, %.4f, %.4f), taken = false, model = '%s', getOutOffset = 1.3, xray = true, xrayMonitor = vector3(%.4f, %.4f, %.4f), xrayMonitorRot = vector3(%.1f, %.1f, %.1f), screenScale = %s, lockedBed = true },",
             tempBedData.coords.x, tempBedData.coords.y, tempBedData.coords.z - 1.0, tempBedData.heading,
             tempBedData.model,
-            monitorCoords.x, monitorCoords.y, monitorCoords.z,  -- SIN ajustes
+            monitorCoords.x, monitorCoords.y, monitorCoords.z,
             monitorRot.x, monitorRot.y, adjustedRotZ,
             scale
         )
@@ -469,38 +650,71 @@ end
 function HandleMonitorPlacement()
     if not placingMonitorType or not spawnedMonitor or not DoesEntityExist(spawnedMonitor) then return end
 
-    local hit, coords = GetCameraWorldPosition(spawnedMonitor)
+    local hit, coords, normal, material = GetCameraWorldPosition(spawnedMonitor)
+
     if hit and coords then
+        if gridSnapEnabled then
+            coords = vector3(
+                SnapToGrid(coords.x),
+                SnapToGrid(coords.y),
+                SnapToGrid(coords.z)
+            )
+        end
+
         if placingMonitorType == "xray" then
-            local heading = GetEntityHeading(spawnedMonitor)
+            local heading = manualRotation
             local radians = math.rad(heading)
-            
-            local rightOffset = Config.cornerOffsetRight or 0.25 
+
+            local rightOffset = Config.cornerOffsetRight or 0.25
             local backOffset = Config.cornerOffsetBack or 0.15
             local topOffset = Config.cornerOffsetTop or 0.4
-            
+
             local offsetX = (rightOffset * math.cos(radians)) - (backOffset * math.sin(radians))
             local offsetY = (rightOffset * math.sin(radians)) + (backOffset * math.cos(radians))
-            
+
             SetEntityCoords(
-                spawnedMonitor, 
-                coords.x - offsetX, 
-                coords.y - offsetY, 
-                coords.z - topOffset, 
+                spawnedMonitor,
+                coords.x - offsetX,
+                coords.y - offsetY,
+                coords.z - topOffset + verticalOffset,
                 false, false, false, true
             )
         else
             SetEntityCoords(spawnedMonitor, coords.x, coords.y, coords.z + verticalOffset, false, false, false, true)
         end
+
+        if normal then
+            surfaceNormal = normal
+        end
     end
 
-    local heading = GetEntityHeading(spawnedMonitor)
+    if snapToSurface and surfaceNormal then
+        local normalLength = math.sqrt(surfaceNormal.x * surfaceNormal.x + surfaceNormal.y * surfaceNormal.y +
+            surfaceNormal.z * surfaceNormal.z)
+        if normalLength > 0.01 then
+            local normalizedNormal = vector3(
+                surfaceNormal.x / normalLength,
+                surfaceNormal.y / normalLength,
+                surfaceNormal.z / normalLength
+            )
+
+            local pitch = math.deg(math.asin(-normalizedNormal.z)) + manualPitch
+
+            if placingMonitorType == "ecg" and normalizedNormal.z < -0.8 then
+                pitch = manualPitch
+            end
+
+            SetEntityRotation(spawnedMonitor, pitch, 0.0, manualRotation, 2, true)
+        end
+    else
+        SetEntityRotation(spawnedMonitor, manualPitch, 0.0, manualRotation, 2, true)
+    end
 
     if IsControlPressed(0, 241) then
-        SetEntityHeading(spawnedMonitor, heading + rotationSpeed)
+        manualRotation = manualRotation + rotationSpeed
     end
     if IsControlPressed(0, 242) then
-        SetEntityHeading(spawnedMonitor, heading - rotationSpeed)
+        manualRotation = manualRotation - rotationSpeed
     end
 
     if IsControlPressed(0, 172) then
@@ -511,10 +725,51 @@ function HandleMonitorPlacement()
     end
 
     if IsControlPressed(0, 174) then
-        SetEntityHeading(spawnedMonitor, heading - rotationSpeed)
+        manualRotation = manualRotation - rotationSpeed
     end
     if IsControlPressed(0, 175) then
-        SetEntityHeading(spawnedMonitor, heading + rotationSpeed)
+        manualRotation = manualRotation + rotationSpeed
+    end
+
+    if IsControlPressed(0, 21) then
+        if IsControlPressed(0, 172) then
+            manualPitch = manualPitch + rotationSpeed
+        end
+        if IsControlPressed(0, 173) then
+            manualPitch = manualPitch - rotationSpeed
+        end
+    end
+
+    if IsControlJustPressed(0, 288) then
+        snapToSurface = not snapToSurface
+        ShowNotification('info', 'Config Tool', 'Snap to Surface: ' .. (snapToSurface and 'ENABLED' or 'DISABLED'))
+    end
+
+    if IsControlJustPressed(0, 289) then
+        gridSnapEnabled = not gridSnapEnabled
+        ShowNotification('info', 'Config Tool', 'Grid Snap: ' .. (gridSnapEnabled and 'ENABLED' or 'DISABLED'))
+    end
+
+    if IsControlJustPressed(0, 170) then
+        showDebugInfo = not showDebugInfo
+        ShowNotification('info', 'Config Tool', 'Debug Info: ' .. (showDebugInfo and 'ENABLED' or 'DISABLED'))
+    end
+
+    if IsControlPressed(0, 10) then
+        verticalOffset = verticalOffset + (moveSpeed * 0.1)
+    end
+    if IsControlPressed(0, 11) then
+        verticalOffset = verticalOffset - (moveSpeed * 0.1)
+    end
+
+    if IsControlPressed(0, 21) then
+        local fastRotation = rotationSpeed * 3
+        if IsControlPressed(0, 174) then
+            manualRotation = manualRotation - fastRotation
+        end
+        if IsControlPressed(0, 175) then
+            manualRotation = manualRotation + fastRotation
+        end
     end
 
     if IsControlJustPressed(0, 191) then
@@ -525,7 +780,8 @@ function HandleMonitorPlacement()
     end
 
     local monitorCoords = GetEntityCoords(spawnedMonitor)
-    UpdateHUDCoords(monitorCoords.x, monitorCoords.y, monitorCoords.z, heading)
+    UpdateHUDCoords(monitorCoords.x, monitorCoords.y, monitorCoords.z, manualRotation)
+    DrawDebugInfo(spawnedMonitor, surfaceNormal)
 end
 
 function CancelMonitorPlacement()
@@ -535,6 +791,8 @@ function CancelMonitorPlacement()
     end
     spawnedMonitor, placingMonitorType = nil, nil
     tempBedData = nil
+    manualRotation = 0.0
+    manualPitch = 0.0
     CleanupConfiguration()
     ShowNotification('error', 'Config Tool', _L('monitor_cancelled'))
 end
@@ -572,6 +830,13 @@ function CleanupConfiguration()
     configType = nil
     originalCoords = nil
     verticalOffset = 0.0
+    positionHistory = {}
+    snapToSurface = false
+    surfaceNormal = nil
+    gridSnapEnabled = false
+    showDebugInfo = false
+    manualRotation = 0.0
+    manualPitch = 0.0
     HideHUD()
 end
 
@@ -609,6 +874,12 @@ end, false)
 AddEventHandler('onResourceStop', function(resourceName)
     if GetCurrentResourceName() == resourceName then
         CleanupConfiguration()
+        if spawnedMonitor and DoesEntityExist(spawnedMonitor) then
+            DeleteEntity(spawnedMonitor)
+        end
+        if spawnedPager and DoesEntityExist(spawnedPager) then
+            DeleteEntity(spawnedPager)
+        end
         HideHUD()
     end
 end)
@@ -631,6 +902,8 @@ function StartPlacingPagerScreen()
     placingPagerScreen = true
     configMode = false
     verticalOffset = 0.0
+    manualRotation = 0.0
+    manualPitch = 0.0
 
     RequestModel(Config.PagerScreen)
     while not HasModelLoaded(Config.PagerScreen) do
@@ -652,22 +925,100 @@ end
 function HandlePagerScreenPlacement()
     if not placingPagerScreen or not spawnedPager or not DoesEntityExist(spawnedPager) then return end
 
-    local hit, coords = GetCameraWorldPosition(spawnedPager)
+    local hit, coords, normal, material = GetCameraWorldPosition(spawnedPager)
+
     if hit and coords then
+        if gridSnapEnabled then
+            coords = vector3(
+                SnapToGrid(coords.x),
+                SnapToGrid(coords.y),
+                SnapToGrid(coords.z)
+            )
+        end
+
         SetEntityCoords(spawnedPager, coords.x, coords.y, coords.z + verticalOffset, false, false, false, true)
+
+        if normal then
+            surfaceNormal = normal
+        end
     end
 
-    local heading = GetEntityHeading(spawnedPager)
-    if IsControlPressed(0, 241) then SetEntityHeading(spawnedPager, heading + rotationSpeed) end
-    if IsControlPressed(0, 242) then SetEntityHeading(spawnedPager, heading - rotationSpeed) end
-    if IsControlPressed(0, 172) then verticalOffset = verticalOffset + moveSpeed end
-    if IsControlPressed(0, 173) then verticalOffset = verticalOffset - moveSpeed end
+    if snapToSurface and surfaceNormal then
+        local normalLength = math.sqrt(surfaceNormal.x * surfaceNormal.x + surfaceNormal.y * surfaceNormal.y +
+            surfaceNormal.z * surfaceNormal.z)
+        if normalLength > 0.01 then
+            local normalizedNormal = vector3(
+                surfaceNormal.x / normalLength,
+                surfaceNormal.y / normalLength,
+                surfaceNormal.z / normalLength
+            )
+
+            local pitch = math.deg(math.asin(-normalizedNormal.z)) + manualPitch
+            SetEntityRotation(spawnedPager, pitch, 0.0, manualRotation, 2, true)
+        end
+    else
+        SetEntityRotation(spawnedPager, manualPitch, 0.0, manualRotation, 2, true)
+    end
+
+    if IsControlPressed(0, 241) then
+        manualRotation = manualRotation + rotationSpeed
+    end
+    if IsControlPressed(0, 242) then
+        manualRotation = manualRotation - rotationSpeed
+    end
+    if IsControlPressed(0, 172) then
+        verticalOffset = verticalOffset + moveSpeed
+    end
+    if IsControlPressed(0, 173) then
+        verticalOffset = verticalOffset - moveSpeed
+    end
 
     if IsControlPressed(0, 174) then
-        SetEntityHeading(spawnedPager, heading - rotationSpeed)
+        manualRotation = manualRotation - rotationSpeed
     end
     if IsControlPressed(0, 175) then
-        SetEntityHeading(spawnedPager, heading + rotationSpeed)
+        manualRotation = manualRotation + rotationSpeed
+    end
+
+    if IsControlPressed(0, 21) then
+        if IsControlPressed(0, 172) then
+            manualPitch = manualPitch + rotationSpeed
+        end
+        if IsControlPressed(0, 173) then
+            manualPitch = manualPitch - rotationSpeed
+        end
+    end
+
+    if IsControlJustPressed(0, 288) then
+        snapToSurface = not snapToSurface
+        ShowNotification('info', 'Config Tool', 'Snap to Surface: ' .. (snapToSurface and 'ENABLED' or 'DISABLED'))
+    end
+
+    if IsControlJustPressed(0, 289) then
+        gridSnapEnabled = not gridSnapEnabled
+        ShowNotification('info', 'Config Tool', 'Grid Snap: ' .. (gridSnapEnabled and 'ENABLED' or 'DISABLED'))
+    end
+
+    if IsControlJustPressed(0, 170) then
+        showDebugInfo = not showDebugInfo
+        ShowNotification('info', 'Config Tool', 'Debug Info: ' .. (showDebugInfo and 'ENABLED' or 'DISABLED'))
+    end
+
+    if IsControlPressed(0, 10) then
+        verticalOffset = verticalOffset + (moveSpeed * 0.1)
+    end
+    if IsControlPressed(0, 11) then
+        verticalOffset = verticalOffset - (moveSpeed * 0.1)
+    end
+
+    if IsControlPressed(0, 21) then
+        local fastRotation = rotationSpeed * 3
+        if IsControlPressed(0, 174) then
+            manualRotation = manualRotation - fastRotation
+        end
+        if IsControlPressed(0, 175) then
+            manualRotation = manualRotation + fastRotation
+        end
     end
 
     if IsControlJustPressed(0, 191) then
@@ -678,14 +1029,14 @@ function HandlePagerScreenPlacement()
     end
 
     local pagerCoords = GetEntityCoords(spawnedPager)
-    UpdateHUDCoords(pagerCoords.x, pagerCoords.y, pagerCoords.z, heading)
+    UpdateHUDCoords(pagerCoords.x, pagerCoords.y, pagerCoords.z, manualRotation)
+    DrawDebugInfo(spawnedPager, surfaceNormal)
 end
 
 function SavePagerScreenConfig()
     if not spawnedPager or not DoesEntityExist(spawnedPager) then return end
 
     local coords = GetEntityCoords(spawnedPager)
-    local heading = GetEntityHeading(spawnedPager)
 
     local cfg = string.format([[
 IncomingScreenPos = {
@@ -695,8 +1046,8 @@ IncomingScreenPos = {
 IncomingScreenSoundPos = {
     vector4(%.4f, %.4f, %.4f, %.4f),
 },]],
-        coords.x, coords.y, coords.z, heading,
-        coords.x, coords.y, coords.z, heading
+        coords.x, coords.y, coords.z, manualRotation,
+        coords.x, coords.y, coords.z, manualRotation
     )
 
     print(cfg)
@@ -706,6 +1057,8 @@ IncomingScreenSoundPos = {
 
     DeleteEntity(spawnedPager)
     spawnedPager, placingPagerScreen = nil, false
+    manualRotation = 0.0
+    manualPitch = 0.0
     HideHUD()
 end
 
@@ -714,6 +1067,8 @@ function CancelPagerScreenPlacement()
         DeleteEntity(spawnedPager)
     end
     spawnedPager, placingPagerScreen = nil, false
+    manualRotation = 0.0
+    manualPitch = 0.0
     HideHUD()
     ShowNotification('error', 'Config Tool', _L('pager_cancelled'))
 end

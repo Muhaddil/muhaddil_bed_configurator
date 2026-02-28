@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { Camera, RotateCw, MoveVertical, Check, X } from "lucide-react"
 import { useTheme, themes } from "../context/ThemeContext"
 import { useLocale } from "../context/LocaleContext"
@@ -17,7 +17,8 @@ const typeColors = {
   },
 }
 
-export default function HUDPanel({ configType, title, coords }) {
+export default function HUDPanel({ configType, title, coords, debugData }) {
+
   const { theme } = useTheme()
   const { t } = useLocale()
   const currentTheme = themes[theme]
@@ -26,8 +27,12 @@ export default function HUDPanel({ configType, title, coords }) {
     { icon: Camera, label: t("label_camera"), description: t("control_camera_desc") },
     { icon: RotateCw, label: t("label_wheel_arrows"), description: t("control_rotate_desc") },
     { icon: MoveVertical, label: t("label_up_down"), description: t("control_height_desc") },
+    { icon: MoveVertical, label: t("label_fine_height"), description: t("control_fine_height_desc") },
     { icon: Check, label: t("label_enter"), description: t("control_save_desc") },
     { icon: X, label: t("label_esc"), description: t("control_cancel_desc") },
+    { icon: RotateCw, label: t("label_snap_surface"), description: t("control_snap_surface_key") },
+    { icon: RotateCw, label: t("label_grid_snap"), description: t("control_grid_snap_key") },
+    { icon: RotateCw, label: t("label_debug_info"), description: t("control_debug_info_key") },
   ]
 
   const containerVariants = {
@@ -109,9 +114,9 @@ export default function HUDPanel({ configType, title, coords }) {
             </div>
           </div>
 
-          <motion.div className="space-y-2" variants={containerVariants} initial="hidden" animate="visible">
+          <motion.div className="grid grid-cols-2 gap-3" variants={containerVariants} initial="hidden" animate="visible">
             {controls.map((control, index) => (
-              <motion.div key={control.label} variants={itemVariants} className="flex items-center gap-3 group">
+              <motion.div key={control.label} variants={itemVariants} className="flex items-center gap-2 group">
                 <motion.div
                   whileHover={{ scale: 1.05, x: 5 }}
                   className="px-3 py-2 rounded-lg border transition-all flex-shrink-0"
@@ -181,7 +186,7 @@ export default function HUDPanel({ configType, title, coords }) {
             {t("label_coordinates")}
           </h3>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 mb-4">
             {[
               { label: "X", value: coords.x, color: currentTheme.error },
               { label: "Y", value: coords.y, color: currentTheme.success },
@@ -216,22 +221,62 @@ export default function HUDPanel({ configType, title, coords }) {
               </motion.div>
             ))}
           </div>
+
+          <AnimatePresence>
+            {debugData && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="overflow-hidden"
+              >
+                <div className="pt-4 border-t" style={{ borderColor: currentTheme.border }}>
+                  <h4 className="text-xs font-bold mb-3 uppercase opacity-70" style={{ color: currentTheme.primary }}>
+                    {t("label_debug_info")}
+                  </h4>
+                  <div className="space-y-2 text-xs font-mono" style={{ color: currentTheme.text }}>
+                    <div className="flex justify-between">
+                      <span>{t("debug_pos")}:</span>
+                      <span>{debugData.coords.x.toFixed(2)}, {debugData.coords.y.toFixed(2)}, {debugData.coords.z.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{t("debug_head")}:</span>
+                      <span>{debugData.heading.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{t("debug_rot")}:</span>
+                      <span>{debugData.rotation.x.toFixed(2)}, {debugData.rotation.y.toFixed(2)}, {debugData.rotation.z.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{t("debug_snap")}:</span>
+                      <span style={{ color: debugData.snapToSurface ? currentTheme.success : currentTheme.error }}>
+                        {debugData.snapToSurface ? t("status_on") : t("status_off")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{t("debug_grid")}:</span>
+                      <span style={{ color: debugData.gridSnapEnabled ? currentTheme.success : currentTheme.error }}>
+                        {debugData.gridSnapEnabled ? t("status_on") : t("status_off")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{t("debug_history")}:</span>
+                      <span>{debugData.historyCount}/{debugData.maxHistory}</span>
+                    </div>
+                    {debugData.surfaceNormal && (
+                      <div className="flex justify-between">
+                        <span>{t("debug_normal")}:</span>
+                        <span>{debugData.surfaceNormal.x.toFixed(2)}, {debugData.surfaceNormal.y.toFixed(2)}, {debugData.surfaceNormal.z.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.div>
-
-      <motion.div
-        className="absolute -top-2 -right-2 w-32 h-32 rounded-full opacity-20 blur-3xl pointer-events-none"
-        style={{ backgroundColor: currentTheme.primary }}
-        animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.15, 0.25, 0.15],
-        }}
-        transition={{
-          duration: 4,
-          repeat: Number.POSITIVE_INFINITY,
-          ease: "easeInOut",
-        }}
-      />
     </motion.div>
   )
 }

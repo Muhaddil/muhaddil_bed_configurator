@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { AnimatePresence } from "framer-motion"
 import HUDPanel from "./components/HUDPanel"
 import Notification from "./components/Notification"
@@ -14,6 +14,7 @@ function App() {
   const [coords, setCoords] = useState({ x: 0, y: 0, z: 0, h: 0 })
   const [notification, setNotification] = useState(null)
   const [locales, setLocales] = useState({})
+  const [debugData, setDebugData] = useState(null)
 
   useEffect(() => {
     const handleMessage = (event) => {
@@ -37,7 +38,6 @@ function App() {
           setLocales({ ...data.locales })
           break
 
-
         case "updateCoords":
           setCoords({
             x: data.x,
@@ -45,6 +45,10 @@ function App() {
             z: data.z,
             h: data.h,
           })
+          break
+
+        case "updateDebug":
+          setDebugData(data.debugData)
           break
 
         case "showNotification":
@@ -62,12 +66,16 @@ function App() {
     return () => window.removeEventListener("message", handleMessage)
   }, [])
 
+  const handleCloseNotification = useCallback(() => {
+    setNotification(null)
+  }, [])
+
   return (
     <ThemeProvider>
       <LocaleProvider initialLocales={locales}>
         <div className="w-full h-full relative">
           <AnimatePresence>
-            {hudVisible && <HUDPanel configType={configType} title={title} coords={coords} />}
+            {hudVisible && <HUDPanel configType={configType} title={title} coords={coords} debugData={debugData} />}
           </AnimatePresence>
 
           <AnimatePresence>
@@ -77,7 +85,7 @@ function App() {
                 type={notification.type}
                 title={notification.title}
                 message={notification.message}
-                onClose={() => setNotification(null)}
+                onClose={handleCloseNotification}
               />
             )}
           </AnimatePresence>
