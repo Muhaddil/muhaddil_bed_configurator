@@ -58,6 +58,13 @@ local function printCentered(text, length, colorCode)
     printWithColor('│' .. string.rep(' ', leftPadding) .. text .. string.rep(' ', rightPadding) .. '│', colorCode)
 end
 
+local function printClickableLink(label, url, length, colorCode)
+    local clickable = '\27]8;;' .. url .. '\27\\' .. label .. '\27]8;;\27\\'
+    local maxLength = length - 2
+    local paddedLine = clickable .. string.rep(' ', math.max(0, maxLength - #label))
+    printWithColor('│' .. paddedLine .. '│', colorCode)
+end
+
 local function printWrapped(text, length, colorCode)
     if type(text) ~= "string" then
         text = tostring(text)
@@ -103,6 +110,7 @@ function fetchVersionData()
                 versionData.releaseDate = formatDate(data.published_at or "Unknown")
                 versionData.notes = shortenTexts(data.body or "No notes available")
                 versionData.downloadUrl = shortenTexts(data.html_url or "No download link available")
+                versionData.downloadUrlFull = data.html_url or ""
                 displayVersionData()
                 isUpdateAvailable = (versionData.latestVersion ~= currentVersion)
             else
@@ -126,7 +134,7 @@ function displayVersionData()
             printWrapped('Latest version: ' .. versionData.latestVersion, boxWidth, '33')  -- Yellow
             printWrapped('Released: ' .. versionData.releaseDate, boxWidth, '33')          -- Yellow
             printWrapped('Notes: ' .. versionData.notes, boxWidthNotes, '33')              -- Yellow
-            printWrapped('Download: ' .. versionData.downloadUrl, boxWidth, '32')          -- Green
+            printClickableLink('Download: ' .. versionData.downloadUrl, versionData.downloadUrlFull, boxWidth, '32') -- Green
             print('╰────────────────────────────────────────────────────╯')
         else
             print('╭────────────────────────────────────────────────────╮')
